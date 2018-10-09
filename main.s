@@ -43,7 +43,11 @@ Index     SPACE 4 ; index into Stepper table 0,1,2,3
 Direction SPACE 4 ; -1 for CCW, 0 for stop 1 for CW
 
 ;place your debug variables in RAM here
-
+DataBuffer 	SPACE 100	;100 8 bit entries
+TimeBuffer 	SPACE 400
+DataPt 		SPACE 4
+TimePt		SPACE 4
+PrevTime	SPACE 4
 ; ROM Area
         IMPORT TExaS_Init
         IMPORT SysTick_Init
@@ -59,7 +63,7 @@ Start
       BL   TExaS_Init ; logic analyzer, 80 MHz
  ;place your initializations here
       BL   Stepper_Init ; initialize stepper motor
-
+	  
 ;**********************
       BL   Debug_Init ;(you write this)
 ;**********************
@@ -146,15 +150,84 @@ Wait
       BX   LR
       
 Debug_Init 
-      PUSH {R0-R4,LR}
+	PUSH {R0-R4,LR}
 ; you write this
-
-      POP {R0-R4,PC}
+	LDR R0,=DataBuffer
+	MOV R1, #100
+	MOV R2,#0xFF
+loop1
+	STRB R2,[R0]
+	ADD R0,#1
+	SUBS R1,#1
+	BNE loop1
+	
+	LDR R0,=TimeBuffer
+	MOV R1,#100
+	LDR R2,=0xFFFFFFFF
+loop2
+	STR R2,[R0]
+	ADD R0,#4
+	SUBS R1,#1
+	BNE loop2
+	
+	LDR R0,=DataBuffer
+	LDR R1,=DataPt
+	STR R0,[R1]
+	LDR R0,=TimeBuffer
+	LDR R1,=TimePt
+	STR R0,[R1]
+	LDR R0,=PrevTime
+	MOV R1,#0
+	STR R1,[R0] ;init prevtime to 0
+	BL SysTick_Init
+	
+	
+    POP {R0-R4,PC}
 ;Debug capture      
 Debug_Capture 
-      PUSH {R0-R6,LR}
+	PUSH {R0-R6,LR}
 ; you write this
+;R5: Data end address
+;R6: Time end address
+;R0: DataPt
+;R1: TimePt
+	
+	MOV R5,#99
+	LDR R0,=DataBuffer
+	ADD R5,R0
+	MOV R6,#396
+	LDR R0,=TimeBuffer
+	ADD R6,R0
+	LDR R0,=DataPt
+	LDR R0,[R0]
+	LDR R1,=TimePt
+	LDR R1,[R1]
 
+loop3
+;check if data is full
+	CMP R0,R5
+	BEQ done
+;check if time is full
+	CMP R1,R6
+	BEQ done
+;not full, capture data
+	LDR R2,=GPIO_PORTE_DATA_R
+	LDR R2,[R2]
+	AND R2,0x1F
+	STRB R2,[R0]
+	ADD R0,#1
+	
+	LDR R2,=NVIC_ST_CURRENT_R
+	LDR R2,[R2]
+	LDR R3,=PrevTime
+	LDR R3,[R3]
+	SUB R4,R3,R2
+	LDR R5,=0x00FFFFFF
+	AND R4,R5
+	STR R4,[R1]
+	ADD R1,#4
+	
+done
       POP  {R0-R6,PC}
 
 
