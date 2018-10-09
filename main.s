@@ -63,7 +63,7 @@ Start
       BL   TExaS_Init ; logic analyzer, 80 MHz
  ;place your initializations here
       BL   Stepper_Init ; initialize stepper motor
-	  
+	  BL   Heartbeat_Init
 ;**********************
       BL   Debug_Init ;(you write this)
 ;**********************
@@ -192,10 +192,10 @@ Debug_Capture
 ;R0: DataPt
 ;R1: TimePt
 	
-	MOV R5,#99
+	MOV R5,#100
 	LDR R0,=DataBuffer
 	ADD R5,R0
-	MOV R6,#396
+	MOV R6,#400
 	LDR R0,=TimeBuffer
 	ADD R6,R0
 	LDR R0,=DataPt
@@ -203,7 +203,7 @@ Debug_Capture
 	LDR R1,=TimePt
 	LDR R1,[R1]
 
-loop3
+
 ;check if data is full
 	CMP R0,R5
 	BEQ done
@@ -221,17 +221,47 @@ loop3
 	LDR R2,[R2]
 	LDR R3,=PrevTime
 	LDR R3,[R3]
-	SUB R4,R3,R2
+	SUB R4,R3,R2			;prev-current
 	LDR R5,=0x00FFFFFF
 	AND R4,R5
-	STR R4,[R1]
+	STR R4,[R1]		;store time into buffer
 	ADD R1,#4
+	LDR R3,=PrevTime
+	STR R2,[R3]		;update previous to current
 	
+	LDR R2,=DataPt
+	STR R0,[R2]		;update time pointer
+	LDR R2,=TimePt
+	STR R1,[R2]		;update time pointer
+	
+	LDR R0,=GPIO_PORTF_DATA_R
+	LDR R1,[R0]
+	EOR R1,0x04		;toggle PF2
+	STR R1,[R0]
+
 done
       POP  {R0-R6,PC}
 
+;DEBUG CAPTURE: 40 instructions, est intrusiveness = 0.000625%
+;500ns/80ms
 
+Heartbeat_Init
+	PUSH {R0-R2,LR}
+	LDR R0,=SYSCTL_RCGCGPIO_R
+	LDR R1,[R0]
+	ORR R1,0x20		;enable F clock
+	STR R1,[R0]
+	NOP
+	NOP
+	LDR R0,=GPIO_PORTF_DIR_R
+	LDR R1,[R0]
+	ORR R1,0x04		;set bit 2 high (output)
+	STR R1,[R0]
+	LDR R0,=GPIO_PORTF_DEN_R
+	LDR R1,[R0]
+	ORR R1,0x04		;enable PF2
+	STR R1,[R0]
+	POP {R0-R2,PC}
 
       ALIGN      ; make sure the end of this section is aligned
       END        ; end of file
-
